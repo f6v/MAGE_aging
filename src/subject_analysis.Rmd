@@ -1,0 +1,96 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r, message=F}
+library(tidyverse)
+```
+
+
+```{r, message = F}
+all_subject_genotypes <- 1:22 %>%
+  map(~read_csv(paste("../data/export_subject_genotypes/", "genotypes_chr", .x, ".csv", sep = ""))) %>%
+  bind_rows() %>%
+  gather("subject_id", "genotype", -locus) %>%
+  filter(!is.na(genotype)) %>%
+  mutate(short_subject_id = str_extract(subject_id, "^\\w+-\\w+"))
+
+quality_genotypes <- all_subject_genotypes %>%
+  group_by(subject_id) %>% summarise(n_quality_loci = n())
+
+phenotypes <- read_tsv("../data/Phenotypes.txt", skip = 10)
+mapped_reads <- read_csv("../data/mapped_reads.csv")
+
+subject_analysis_results <- read_csv("../data/subject_analysis_results/subject_analysis.csv") %>%
+  mutate(short_subject_id = str_extract(subject_id, "^\\w+-\\w+")) %>%
+  inner_join(phenotypes, by = c("short_subject_id" = "SUBJID")) %>%
+  inner_join(mapped_reads, by = c("subject_id" = "sample")) %>%
+  inner_join(quality_genotypes)
+
+subject_analysis_results <- subject_analysis_results %>%
+  mutate(log_num_reads = log(num_reads))
+
+subject_analysis_results
+```
+
+#### Number of mapped reads as a covariate
+
+```{r}
+fit <- lm(subject_median_ratio ~ AGE + log_num_reads + RACE, data = subject_analysis_results)
+summary(fit)
+```
+
+#### Subject median ratio as a function of age
+
+```{r}
+subject_analysis_results %>%
+  ggplot(aes(x = AGE, y = subject_median_ratio)) +
+  geom_point() +
+  theme_minimal() +
+  xlab("Subject age") +
+  ylab("Allelic ratio") +
+  theme(text = element_text(size = 16), axis.text = element_text(size=14))
+```
+
+#### Subject median ratio as a function of number of heterozygous loci
+
+```{r}
+subject_analysis_results %>%
+  ggplot(aes(x = n_hetroz_loci, y = subject_median_ratio)) +
+  geom_point()
+```
+
+#### Subject median ratio as a function of log number of mapped reads
+
+```{r}
+subject_analysis_results %>%
+  ggplot(aes(x = log_num_reads, y = subject_median_ratio)) +
+  geom_point()
+```
+
+#### Remove samples with too many or too few mapped reads
+
+```{r}
+subject_analysis_results_trimmed <- subject_analysis_results %>%
+  filter(log_num_reads > 17.5 & log_num_reads < 19)
+
+fit <- lm(subject_median_ratio ~ AGE + log_num_reads, data = subject_analysis_results_trimmed)
+summary(fit)
+```
+
+```{r}
+subject_analysis_results_trimmed %>%
+  ggplot(aes(x = log_num_reads, y = subject_median_ratio)) +
+  geom_point()
+```
+
+p-value is less significant when removing samples based on number of reads.
+
+
+```{r}
+subject_analysis_results_trimmed %>%
+  ggplot(aes(x = AGE, y = subject_median_ratio)) +
+  geom_point()
+```
+

@@ -1,0 +1,89 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+```
+
+## Load the data
+
+```{r}
+file_path <- "../data/Phenotypes.txt"
+phenotypes <- readr::read_tsv(file_path, skip = 10)
+dim(phenotypes)
+```
+
+Leave only phenotypes for blood samples:
+
+```{r}
+phenotypes_blood <- phenotypes %>%
+  filter(SUBJID %in% subject_ids)
+```
+
+```{r}
+phenotypes_processed <- phenotypes_blood %>%
+  mutate(
+    SEX = recode(SEX, `1` = "Male", `2` = "Female"),
+    RACE = recode(RACE, `1` = "Asian", `2` = "Black or African American", `3` = "White",
+                  `4` = "American Indian or Alaska Native", `98` = "Unknown", `99` = "Unknown")
+  ) %>%
+  mutate(DTHFUCOD = tolower(DTHFUCOD)) %>%
+  mutate(
+    DTHFUCOD = replace(DTHFUCOD, is.na(DTHFUCOD), "unknown"),
+    DTHFUCOD = replace(DTHFUCOD, str_detect(DTHFUCOD, "unknown|n/a|none"), "unknown"),
+    DTHFUCOD = replace(DTHFUCOD, str_detect(DTHFUCOD, "drug|overdose|cocaine|alcohol|etoh abuse"), "substances abuse"),
+    DTHFUCOD = replace(DTHFUCOD, str_detect(DTHFUCOD, "trauma|injury"), "trauma"),
+    DTHFUCOD = replace(DTHFUCOD, str_detect(DTHFUCOD, "gun|gsw"), "gunshot"),
+    DTHFUCOD = replace(DTHFUCOD, str_detect(DTHFUCOD, "intercranial h|intracranial h|intracranial; h"), "intracranial hemorrhage"),
+    DTHFUCOD = replace(DTHFUCOD, str_detect(DTHFUCOD, "myocardial infarction|mi|heart attack|heart failure|cardiac arrest|heart disease|cardiovascular|arrest; cardiac"), "cardiovascular"),
+    DTHFUCOD = replace(DTHFUCOD, str_detect(DTHFUCOD, "ich"), "intracerebral hemorrhage"),
+    DTHFUCOD = replace(DTHFUCOD, str_detect(DTHFUCOD, "accident"), "accident"),
+  )
+```
+
+## Visualize
+
+```{r}
+phenotypes_processed %>%
+  count(SEX)
+```
+
+```{r}
+phenotypes_processed %>%
+  count(RACE)
+
+phenotypes_processed %>%
+  ggplot(aes(x = RACE)) +
+  geom_bar()
+```
+
+```{r}
+phenotypes_processed %>%
+  ggplot(aes(x = AGE)) +
+  geom_bar(binwidth = 10, center = 10, color = I("white"), fill = ("#D55E00")) +
+  scale_x_continuous(breaks=seq(0, max(phenotypes$AGE) + 20, by = 10)) +
+  xlab("Age at death") +
+  ylab("Count") +
+  theme_minimal()
+```
+
+```{r}
+phenotypes_processed %>%
+  mutate(DTHFUCOD = gsub(" ", "\n", DTHFUCOD)) %>%
+  count(DTHFUCOD, sort = TRUE) %>%
+  head() %>%
+    ggplot(aes(x = reorder(DTHFUCOD, n), y = n)) +
+      geom_bar(stat = 'identity', fill = "#009E73") +
+      xlab("Underlying cause of death") +
+      ylab("Count") +
+      coord_flip() +
+      theme_minimal()
+```
+
+

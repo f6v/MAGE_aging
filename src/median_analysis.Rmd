@@ -1,0 +1,48 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r,message=F}
+library(tidyverse)
+```
+
+
+```{r,message=F}
+load_result <- function(chr) {
+  data <- read_csv(paste("../data/median_analysis_results/", "median_analysis_", chr, ".csv", sep = ""))
+  data$chr <- chr
+  
+  return(data)
+}
+
+chrs <- c(1:22, "X")
+all_medians <- chrs %>%
+  map(load_result) %>%
+  bind_rows() %>%
+  mutate(chr = factor(chr))
+
+levels(all_medians$chr) <- as.character(unique(all_medians$chr))
+```
+
+```{r}
+all_medians %>%
+  ggplot(aes(x = chr, y = median)) +
+    geom_boxplot() +
+    theme_minimal() +
+    xlab("Chromosome") +
+    ylab("Median allelic ratio") +
+    theme(text = element_text(size = 16), axis.text = element_text(size=14))
+```
+
+```{r}
+for(chr in chrs) {
+  data_for_chr <- all_medians %>% filter(chr == !!chr)
+  plot <- data_for_chr %>%
+    ggplot(aes(x = median)) +
+      geom_histogram(bins = 30) +
+      xlab(paste("Locus median for chr", chr))
+  print(plot)
+}
+```
+

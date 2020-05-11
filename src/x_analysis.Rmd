@@ -1,0 +1,46 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+```
+
+```{r, message = F}
+phenotypes <- read_tsv("../data/Phenotypes.txt", skip = 10)
+mapped_reads <- read_csv("../data/mapped_reads.csv")
+
+x_results <- read_csv("../data/X_analysis_results/X_analysis.csv") %>%
+  mutate(short_subject_id = str_extract(subject_id, "^\\w+-\\w+")) %>%
+  inner_join(phenotypes, by = c("short_subject_id" = "SUBJID")) %>%
+  inner_join(mapped_reads, by = c("subject_id" = "sample"))
+
+x_results <- x_results %>%
+  mutate(log_num_reads = log(num_reads))
+
+x_results
+```
+
+```{r}
+x_results %>%
+  ggplot(aes(x = AGE, y = subject_median_ratio)) +
+  geom_point() +
+  theme_minimal() +
+  xlab("Subject age") +
+  ylab("Allelic ratio") +
+  theme(text = element_text(size = 16), axis.text = element_text(size=14))
+```
+
+```{r}
+fit_x <- lm(subject_median_ratio ~ AGE + log_num_reads, data = x_results)
+summary(fit_x)
+plot(fit_x)
+```
+
+```{r}
+x_results %>%
+  ggplot(aes(x = n_hetroz_loci)) +
+    geom_boxplot()
+```
+

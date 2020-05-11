@@ -1,0 +1,4 @@
+counts_paths: "/data/designproject/results/sequences/"
+seqem_path: "/data/designproject/sequem/"
+results_path: "/data/designproject/mage_results/"
+chromosomes: [1, 2, 3, 4, X]

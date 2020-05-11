@@ -1,0 +1,143 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r, message = FALSE}
+library(tidyverse)
+```
+
+### Subject genotypes
+
+```{r, message = FALSE}
+samples_to_remove <- read_csv("../data/samples_to_remove.txt", col_names = c("subject_id"))
+duplicated_loci = read_csv("../data/duplicate_positions.csv")$position
+```
+
+```{r, message = FALSE}
+all_subject_genotypes <- 1:22 %>%
+  map(~read_csv(paste("../data/export_subject_genotypes/", "genotypes_chr", .x, ".csv", sep = ""))) %>%
+  bind_rows() %>%
+  gather("subject_id", "genotype", -locus) %>%
+  filter(!is.na(genotype), !(subject_id %in% samples_to_remove$subject_id)) %>%
+  mutate(short_subject_id = str_extract(subject_id, "^\\w+-\\w+"))
+```
+
+```{r, message = T}
+all_counts <- read_csv("../data/prepare_counts_for_subject_analysis_results/counts_with_mage_loci.csv") %>%
+  filter(!(position %in% duplicated_loci))
+```
+
+```{r}
+all_counts %>%
+  select(position, chromosome, dbSNP_ref) %>%
+  group_by(position) %>%
+  distinct(chromosome, dbSNP_ref) %>%
+  filter(n() > 1) %>%
+  arrange(position) %>%
+  write_csv("../duplicate_positions.csv")
+```
+
+```{r}
+all_chromosomes <- 1:22
+all_mage_results <- all_chromosomes %>%
+  map(~load_mage_results("../data/mage_results/", .x)) %>%
+  bind_rows() %>%
+  filter(!(locus %in% duplicated_loci))
+```
+
+
+```{r}
+current_subject <- "GTEX-QMR6-0005-SM-32PKY"
+
+subject_data <- all_subject_genotypes %>%
+    filter(subject_id == current_subject) %>%
+    inner_join(all_mage_results, by = "locus")
+ 
+actual_heteroz <- subject_data %>%
+    summarize(mean(genotype == "rv")) %>%
+    pull()
+expected_heteroz <- subject_data %>%
+    summarize(mean(2 * ref_allele_freq * (1 - ref_allele_freq))) %>%
+    pull()
+f_subject <- actual_heteroz / expected_heteroz
+
+ counts_for_subject <- all_counts %>%
+    filter(sample == current_subject) %>%
+    inner_join(subject_data, by = c("position" = "locus"))
+  
+counts_with_ratios <- counts_for_subject %>%
+    pivot_longer(cols = A:G) %>%
+    group_by(position) %>%
+    filter(name == ref_allele | name == var_allele) %>%
+    mutate(new_count_cols = c('ref_count', 'var_count')) %>%
+    ungroup %>%
+    select(position, value, new_count_cols) %>%
+    pivot_wider(names_from = new_count_cols, values_from = value) %>%
+    left_join(counts_for_subject, .) %>%
+    mutate(ratio = ifelse(ref_count > var_count, var_count / ref_count, ref_count / var_count))
+  
+  n_hetroz_loci <- round(dim(counts_with_ratios)[1] * expected_heteroz * (f_subject))
+  
+  subject_median_ratio <- counts_with_ratios %>%
+    top_n(n_hetroz_loci, ratio) %>%
+    summarise(median(ratio)) %>%
+    pull()
+```
+
+```{r}
+counts_with_ratios %>%
+  ggplot(aes(x = ratio)) +
+    geom_histogram()
+
+counts_with_ratios %>%
+  arrange(desc(ratio)) %>%
+  head(n_hetroz_loci) %>%
+  ggplot(aes(x = ratio)) +
+    geom_histogram()
+```
+
+
+## Results
+
+```{r}
+phenotypes <- read_tsv("../data/Phenotypes.txt", skip = 10)
+subject_analysis_results <- read_csv("../data/subject_analysis_results/subject_analysis.csv") %>%
+  mutate(short_subject_id = str_extract(subject_id, "^\\w+-\\w+")) %>%
+  inner_join(phenotypes, by = c("short_subject_id" = "SUBJID"))
+
+subject_analysis_results %>%
+  ggplot(aes(x = AGE, y = subject_median_ratio)) +
+  geom_point()
+```
+
+```{r}
+get_quality_loci <- function(current_subject) {
+  subject_data <- all_subject_genotypes %>%
+    filter(subject_id == current_subject) %>%
+    inner_join(all_mage_results, by = "locus")
+  
+  return(dim(subject_data)[1])
+}
+
+subject_analysis_results$quality_loci <- sapply(subject_analysis_results$subject_id, get_quality_loci) 
+```
+
+```{r}
+subject_analysis_results %>%
+  ggplot(aes(x = quality_loci, y = subject_median_ratio)) +
+    geom_point()
+```
+
+
+
+
+
+
+
+
+
+
+
+

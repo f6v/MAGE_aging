@@ -1,0 +1,74 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+data <- read_csv("../data/sanity.csv")
+```
+
+### Explore results
+
+```{r}
+data %>% distinct(position, gene)
+```
+
+
+```{r}
+data %>%
+  group_by(position) %>%
+  filter(row_number() == 1) %>%
+  ggplot(aes(x = frac_heteroz)) +
+    geom_histogram(bins = 14, fill = "#009E73")  +
+    theme_minimal()
+```
+
+```{r}
+data %>%
+  group_by(position) %>%
+  filter(row_number() == 1) %>%
+  ggplot(aes(x = inbr_coeff)) +
+    geom_histogram(bins = 14, fill = "#009E73") +
+    theme_minimal()
+  
+```
+
+```{r}
+data %>%
+  ggplot(aes(x = age)) +
+    geom_histogram(binwidth = 1, fill = "#009E73") +
+    theme_minimal()
+```
+
+### Distribution of ratios
+
+```{r}
+loci <- unique(data$position)
+
+for(current_locus in loci) {
+  locus_data <- data %>% filter(position == current_locus)
+
+  ref_col <- locus_data[1, ]$ref_allele
+  var_col <- locus_data[1, ]$var_allele
+  
+  ref_counts <- locus_data[, ref_col] %>% pull()
+  var_counts <- locus_data[, var_col] %>% pull()
+  locus_data$ratio <- ifelse(ref_counts > var_counts, var_counts / ref_counts, ref_counts / var_counts)
+  
+  plot <- locus_data %>%
+    ggplot(aes(x = ratio)) +
+      geom_histogram(binwidth = 0.01, fill = "#009E73") +
+      ggtitle(paste("Locus: ", current_locus, " in gene: ", locus_data[1, "gene"])) +
+      theme_minimal() +
+      xlab("Ratio minor/major allele count")
+  
+  print(plot)
+}
+```
